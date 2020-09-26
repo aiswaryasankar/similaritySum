@@ -1,10 +1,14 @@
 from math import log10
 
-from .pagerank_weighted import pagerank_weighted_scipy as _pagerank
-from .preprocessing.textcleaner import clean_text_by_sentences as _clean_text_by_sentences
-from .commons import build_graph as _build_graph
-from .commons import remove_unreachable_nodes as _remove_unreachable_nodes
+from pagerank_weighted import pagerank_weighted_scipy as _pagerank
+from preprocessing.textcleaner import clean_text_by_sentences as _clean_text_by_sentences
+from commons import build_graph as _build_graph
+from commons import remove_unreachable_nodes as _remove_unreachable_nodes
+from syntactic_unit import SyntacticUnit
+import pandas as pd
 
+# from sentence_transformers import SentenceTransformer
+# model = SentenceTransformer('bert-base-nli-mean-tokens')
 
 def _set_graph_edge_weights(graph):
     for sentence_1 in graph.nodes():
@@ -39,6 +43,10 @@ def _create_valid_graph(graph):
 
 
 def _get_similarity(s1, s2):
+    if type(s1) is list and type(s1[0]) is SyntacticUnit:
+        s1 = s1[0].token
+    if type(s2) is list and type(s2[0]) is SyntacticUnit:
+        s2 = s2[0].token
     words_sentence_one = s1.split()
     words_sentence_two = s2.split()
 
@@ -51,6 +59,12 @@ def _get_similarity(s1, s2):
         return 0
 
     return common_word_count / (log_s1 + log_s2)
+
+def _get_similarity_bert(s1, s2):
+    sentences = [s1, s2]
+    sentence_embeddings = model.encode(sentences)  
+    distance = scipy.spatial.distance.cdist([sentence_embeddings[0]], [sentence_embeddings[1]], "cosine")[0]
+    return distance
 
 
 def _count_common_words(words_sentence_one, words_sentence_two):
@@ -95,51 +109,121 @@ def _get_sentences_with_word_count(sentences, words):
     return selected_sentences
 
 
-def _extract_most_important_sentences(sentences, ratio, words):
-    sentences.sort(key=lambda s: s.score, reverse=True)
+def _extract_most_important_sentences(sentences, ratio, words, sourceNum):
+    releventSentences = []
+    for sentence in sentences:
+        if sentence.source == sourceNum:
+            releventSentences.append(sentence)
+
+    releventSentences.sort(key=lambda s: s.score, reverse=True)
 
     # If no "words" option is selected, the number of sentences is
     # reduced by the provided ratio.
     if words is None:
-        length = len(sentences) * ratio
-        return sentences[:int(length)]
+        length = len(releventSentences) * ratio
+        return releventSentences[:int(length)]
 
     # Else, the ratio is ignored.
     else:
-        return _get_sentences_with_word_count(sentences, words)
+        return _get_sentences_with_word_count(releventSentences, words)
 
 
-def summarize(text, ratio=0.2, words=None, language="english", split=False, scores=False, additional_stopwords=None):
-    if not isinstance(text, str):
+def summarize(text1, text2, ratio=0.2, words=None, language="english", split=False, scores=False, additional_stopwords=None):
+    if not isinstance(text1, str):
+        raise ValueError("Text parameter must be a Unicode object (str)!")
+    if not isinstance(text2, str):
         raise ValueError("Text parameter must be a Unicode object (str)!")
 
     # Gets a list of processed sentences.
-    sentences = _clean_text_by_sentences(text, language, additional_stopwords)
+    # Each sentence is created as a syntactic unit with the source article number to be referenced later on as well
+    languague="english"
+    sentencesText1 = _clean_text_by_sentences(text1, source=0, additional_stopwords=additional_stopwords)
+    sentencesText2 = _clean_text_by_sentences(text2, source=1, additional_stopwords=additional_stopwords)
+    allSentences = _clean_text_by_sentences(text1, source=0, additional_stopwords=additional_stopwords) + _clean_text_by_sentences(text2, source=1, additional_stopwords=additional_stopwords)
 
     # Creates the graph and calculates the similarity coefficient for every pair of nodes.
-    graph = _build_graph([sentence.token for sentence in sentences])
-    _set_graph_edge_weights(graph)
+    graphCombined = _build_graph([sentence.token for sentence in allSentences])
+    _set_graph_edge_weights(graphCombined)
+
+    graph1 = _build_graph([sentence.token for sentence in sentencesText1])
+    _set_graph_edge_weights(graph1)
+
+    graph2 = _build_graph([sentence.token for sentence in sentencesText2])
+    _set_graph_edge_weights(graph2)
 
     # Remove all nodes with all edges weights equal to zero.
-    _remove_unreachable_nodes(graph)
+    _remove_unreachable_nodes(graphCombined)
+    _remove_unreachable_nodes(graph1)
+    _remove_unreachable_nodes(graph2)
 
     # PageRank cannot be run in an empty graph.
-    if len(graph.nodes()) == 0:
+    if len(graphCombined.nodes()) == 0 or len(graph1.nodes()) == 0 or len(graph2.nodes()) == 0:
         return [] if split else ""
 
     # Ranks the tokens using the PageRank algorithm. Returns dict of sentence -> score
-    pagerank_scores = _pagerank(graph)
+    pagerank_scores_combined = _pagerank(graphCombined)
+    pagerank_scores_1 = _pagerank(graph1)
+    pagerank_scores_2 = _pagerank(graph2)
+
+    print("pagerank_scores_combined")
+    print(pagerank_scores_combined)
+    print("pagerank_scores_1")
+    print(pagerank_scores_1)
+    print("pagerank_scores_2")
+    print(pagerank_scores_2)
 
     # Adds the summa scores to the sentence objects.
-    _add_scores_to_sentences(sentences, pagerank_scores)
+    _add_scores_to_sentences(sentencesText1, pagerank_scores_1)
+    _add_scores_to_sentences(sentencesText2, pagerank_scores_2)
+    _add_scores_to_sentences(allSentences, pagerank_scores_combined)
+
+    # I want to create a table that shows the scores of each sentence in the combined graph vs the summary individually and the scores attributed to it
+    sentenceScores = []
+    for sentence in allSentences:
+        if sentence.token in pagerank_scores_1:
+            row = {"sentence": sentence.token, "combinedScore": pagerank_scores_combined[sentence.token], "summary1Score": pagerank_scores_1[sentence.token]}
+            sentenceScores.append(row)
+        if sentence.token in pagerank_scores_2:
+            row = {"sentence": sentence.token, "combinedScore": pagerank_scores_combined[sentence.token], "summary2Score": pagerank_scores_2[sentence.token]}
+            sentenceScores.append(row)
+
+    df = pd.DataFrame(sentenceScores)
+    print(df)
+
 
     # Extracts the most important sentences with the selected criterion.
-    extracted_sentences = _extract_most_important_sentences(sentences, ratio, words)
+    # print("_____TEXT1_____")
+    # for sentence in sentencesText1:
+    #     print(sentence)
+    #     print(sentence.score)
+    # print("_____TEXT2_____")
+    # for sentence in sentencesText2:
+    #     print(sentence)
+    #     print(sentence.score)
+    # print("_____TEXT_COMBINED_____")
+    # for sentence in allSentences:
+    #     print(sentence)
+    #     print(sentence.score)
+    summary1 = _extract_most_important_sentences(sentencesText1, ratio, words, 0)
+    summary2 = _extract_most_important_sentences(sentencesText2, ratio, words, 1)
+    summary1_combined = _extract_most_important_sentences(allSentences, ratio, words, 0)
+    summary2_combined = _extract_most_important_sentences(allSentences, ratio, words, 1)
+
+    # Compare similarity scores of the summaries created 
+    separate_graphs_similarity = _get_similarity(summary1, summary2)
+    combined_graphs_similarity = _get_similarity(summary1_combined, summary2_combined)
+
+    print("Similarity of separate graphs: " + str(separate_graphs_similarity))
+    print("Similarity of combined graphs: " + str(combined_graphs_similarity))
 
     # Sorts the extracted sentences by apparition order in the original text.
-    extracted_sentences.sort(key=lambda s: s.index)
+    summary1.sort(key=lambda s: s.index)
+    summary2.sort(key=lambda s: s.index)
 
-    return _format_results(extracted_sentences, split, scores)
+    # Compute the similarity score of the similar sentences here and the sentences computed without doing the one graph approach
+
+    return [separate_graphs_similarity, combined_graphs_similarity]
+    # return _format_results(extracted_sentences, split, scores)
 
 
 def get_graph(text, language="english"):

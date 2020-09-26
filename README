@@ -130,3 +130,13 @@ To cite this work::
 Summa is open source software released under the `The MIT License (MIT) <http://opensource.org/licenses/MIT>`_.
 
 Copyright (c) 2014 – now Summa NLP.
+
+
+The main goal here with the project I'm working on is to   
+1. Generate individual summaries for each of the articles
+2. Generate individual summaries for each of the articles but generated from a single graph
+3. Compute the similarity of each of the summaries to each other - if the summaries generated through the computed graph is more similar than the summaries generated from the individual graphs then it is a success.
+
+
+
+

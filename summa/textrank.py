@@ -3,21 +3,21 @@ import os
 import sys
 import warnings
 
-from .summarizer import summarize
-from .keywords import keywords
+from summarizer import summarize
+from keywords import keywords
 
 # Types of summarization
 SENTENCE = 0
 WORD = 1
 
-DEFAULT_RATIO = 0.2
+DEFAULT_RATIO = 0.5
 
 
-def textrank(text, summarize_by=SENTENCE, ratio=DEFAULT_RATIO, words=None, additional_stopwords=None):
+def textrank(text1, text2, summarize_by=SENTENCE, ratio=DEFAULT_RATIO, words=None, additional_stopwords=None):
     if summarize_by == SENTENCE:
-        return summarize(text, ratio, words, additional_stopwords=additional_stopwords)
+        return summarize(text1, text2, ratio, words, additional_stopwords=additional_stopwords)
     else:
-        return keywords(text, ratio, words, additional_stopwords=additional_stopwords)
+        return keywords(text1, text2, ratio, words, additional_stopwords=additional_stopwords)
 
 
 def existing_file(file_name):
@@ -38,18 +38,12 @@ def restricted_float(x):
 def parse_args(args):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, prog="textrank", description="Extract the most relevant sentences or keywords of a given text using the TextRank algorithm.")
 
-    group = parser.add_mutually_exclusive_group(required=True)
+    # group = parser.add_mutually_exclusive_group(required=True)
     # New API
-    group.add_argument('--summarize', metavar="path/to/file", type=existing_file,
+    parser.add_argument('--summarize_text_1',
                        help="Run textrank to summarize the input text.")
-    group.add_argument('--keywords', metavar="path/to/file", type=existing_file,
-                       help="Run textrank to extract keywords from the input text.")
-    # Old API
-    group.add_argument('--text', '-t', metavar="path/to/file", type=existing_file,
-                       help="(Deprecated) Text to summarize if --summary option is selected")
-
-    parser.add_argument('--summary', '-s', metavar="{0,1}", type=int, choices=[SENTENCE, WORD], default=0,
-                        help="(Deprecated) Type of unit to summarize: sentence (0) or word (1)")
+    parser.add_argument('--summarize_text_2',
+                       help="Run textrank to summarize the input text.")
     parser.add_argument('--ratio', '-r', metavar="r", type=restricted_float, default=DEFAULT_RATIO,
                         help="Float number (0,1] that defines the length of the summary. It's a proportion of the original text")
     parser.add_argument('--words', '-w', metavar="#words", type=int,
@@ -66,8 +60,9 @@ def main():
     mode = None
     text = None
 
-    if args.summarize:
-        text = args.summarize
+    if args.summarize_text_1 and args.summarize_text_2:
+        text1 = args.summarize_text_1
+        text2 = args.summarize_text_2
         mode = SENTENCE
     elif args.keywords:
         text = args.keywords
@@ -90,7 +85,7 @@ def main():
         else:
             additional_stopwords = args.additional_stopwords.split(",")
 
-    print(textrank(text, mode, args.ratio, args.words, additional_stopwords))
+    print(textrank(text1, text2, summarize_by=mode, ratio=args.ratio))
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ import re
 
 from .snowball import SnowballStemmer
 from .stopwords import get_stopwords_by_language
-from summa.syntactic_unit import SyntacticUnit
+from syntactic_unit import SyntacticUnit
 
 
 # Utility functions adapted from Gensim v0.10.0:
@@ -38,6 +38,7 @@ STOPWORDS = None
 
 def set_stemmer_language(language):
     global STEMMER
+    print(language)
     if not language in SnowballStemmer.languages:
         raise ValueError("Valid languages are: " + ", ".join(sorted(SnowballStemmer.languages)))
     STEMMER = SnowballStemmer(language)
@@ -46,8 +47,7 @@ def set_stemmer_language(language):
 def set_stopwords_by_language(language, additional_stopwords):
     global STOPWORDS
     words = get_stopwords_by_language(language)
-    if not additional_stopwords:
-        additional_stopwords = {}
+    additional_stopwords = {}
     STOPWORDS = frozenset({ w for w in words.split() if w } | { w for w in additional_stopwords if w })
 
 
@@ -141,7 +141,7 @@ def tokenize(text, lowercase=False, deacc=False):
         yield match.group()
 
 
-def merge_syntactic_units(original_units, filtered_units, tags=None):
+def merge_syntactic_units(original_units, filtered_units, source, tags=None):
     units = []
     for i in range(len(original_units)):
         if filtered_units[i] == '':
@@ -150,7 +150,7 @@ def merge_syntactic_units(original_units, filtered_units, tags=None):
         text = original_units[i]
         token = filtered_units[i]
         tag = tags[i][1] if tags else None
-        sentence = SyntacticUnit(text, token, tag)
+        sentence = SyntacticUnit(text, token, tag, source)
         sentence.index = i
 
         units.append(sentence)
@@ -158,14 +158,15 @@ def merge_syntactic_units(original_units, filtered_units, tags=None):
     return units
 
 
-def clean_text_by_sentences(text, language="english", additional_stopwords=None):
+def clean_text_by_sentences(text, source, language="english", additional_stopwords=None):
     """ Tokenizes a given text into sentences, applying filters and lemmatizing them.
     Returns a SyntacticUnit list. """
+    language="english"
     init_textcleanner(language, additional_stopwords)
     original_sentences = split_sentences(text)
     filtered_sentences = filter_words(original_sentences)
 
-    return merge_syntactic_units(original_sentences, filtered_sentences)
+    return merge_syntactic_units(original_sentences, filtered_sentences, source)
 
 
 def clean_text_by_word(text, language="english", deacc=False, additional_stopwords=None):
