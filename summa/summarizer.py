@@ -44,9 +44,21 @@ def _create_valid_graph(graph):
 
 def _get_similarity(s1, s2):
     if type(s1) is list and type(s1[0]) is SyntacticUnit:
-        s1 = s1[0].token
+        s1words = ""
+        for unit in s1:
+            s1words += unit.token
+        s1 = s1words
+
     if type(s2) is list and type(s2[0]) is SyntacticUnit:
-        s2 = s2[0].token
+        s2words = ""
+        for unit in s2:
+            s2words += unit.token
+        s2 = s2words
+
+    print("summary1")
+    print(s1)
+    print("summary2")
+    print(s2)
     words_sentence_one = s1.split()
     words_sentence_two = s2.split()
 
@@ -127,6 +139,19 @@ def _extract_most_important_sentences(sentences, ratio, words, sourceNum):
     else:
         return _get_sentences_with_word_count(releventSentences, words)
 
+def summaryText(summary):
+    summaryText = ""
+    for unit in summary:
+        summaryText += (" " + unit.text)
+    return summaryText
+
+def getDifferences(summary1, summary2):
+    diff = []
+    for sentence in summary1:
+        if sentence not in summary2:
+            diff.append(sentence)
+    return diff
+
 
 def summarize(text1, text2, ratio=0.2, words=None, language="english", split=False, scores=False, additional_stopwords=None):
     if not isinstance(text1, str):
@@ -165,12 +190,12 @@ def summarize(text1, text2, ratio=0.2, words=None, language="english", split=Fal
     pagerank_scores_1 = _pagerank(graph1)
     pagerank_scores_2 = _pagerank(graph2)
 
-    print("pagerank_scores_combined")
-    print(pagerank_scores_combined)
-    print("pagerank_scores_1")
-    print(pagerank_scores_1)
-    print("pagerank_scores_2")
-    print(pagerank_scores_2)
+    # print("pagerank_scores_combined")
+    # print(pagerank_scores_combined)
+    # print("pagerank_scores_1")
+    # print(pagerank_scores_1)
+    # print("pagerank_scores_2")
+    # print(pagerank_scores_2)
 
     # Adds the summa scores to the sentence objects.
     _add_scores_to_sentences(sentencesText1, pagerank_scores_1)
@@ -192,38 +217,43 @@ def summarize(text1, text2, ratio=0.2, words=None, language="english", split=Fal
 
 
     # Extracts the most important sentences with the selected criterion.
-    # print("_____TEXT1_____")
-    # for sentence in sentencesText1:
-    #     print(sentence)
-    #     print(sentence.score)
-    # print("_____TEXT2_____")
-    # for sentence in sentencesText2:
-    #     print(sentence)
-    #     print(sentence.score)
-    # print("_____TEXT_COMBINED_____")
-    # for sentence in allSentences:
-    #     print(sentence)
-    #     print(sentence.score)
+    print("_____TEXT1_____")
+    for sentence in sentencesText1:
+        print(sentence)
+        print(sentence.score)
+    print("_____TEXT2_____")
+    for sentence in sentencesText2:
+        print(sentence)
+        print(sentence.score)
+    print("_____TEXT_COMBINED_____")
+    for sentence in allSentences:
+        print(sentence)
+        print(sentence.score)
     summary1 = _extract_most_important_sentences(sentencesText1, ratio, words, 0)
     summary2 = _extract_most_important_sentences(sentencesText2, ratio, words, 1)
     summary1_combined = _extract_most_important_sentences(allSentences, ratio, words, 0)
     summary2_combined = _extract_most_important_sentences(allSentences, ratio, words, 1)
 
-    # Compare similarity scores of the summaries created 
+    # We want combined_graphs_similarity > separate_graphs_similarity
     separate_graphs_similarity = _get_similarity(summary1, summary2)
     combined_graphs_similarity = _get_similarity(summary1_combined, summary2_combined)
 
-    print("Similarity of separate graphs: " + str(separate_graphs_similarity))
-    print("Similarity of combined graphs: " + str(combined_graphs_similarity))
+    # print("Similarity of separate graphs: " + str(separate_graphs_similarity))
+    # print("Similarity of combined graphs: " + str(combined_graphs_similarity))
 
     # Sorts the extracted sentences by apparition order in the original text.
     summary1.sort(key=lambda s: s.index)
     summary2.sort(key=lambda s: s.index)
+    summary1_combined.sort(key=lambda s: s.index)
+    summary2_combined.sort(key=lambda s: s.index)
+
+    summary1Text = summaryText(summary1)
+    summary2Text = summaryText(summary2)
+    summary1CombinedText = summaryText(summary1_combined)
+    summary2CombinedText = summaryText(summary2_combined)
 
     # Compute the similarity score of the similar sentences here and the sentences computed without doing the one graph approach
-
-    return [separate_graphs_similarity, combined_graphs_similarity]
-    # return _format_results(extracted_sentences, split, scores)
+    return summary1Text, summary2Text, summary1CombinedText, summary2CombinedText, separate_graphs_similarity, combined_graphs_similarity
 
 
 def get_graph(text, language="english"):
